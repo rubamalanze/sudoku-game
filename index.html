@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Game</title>
+
+    <!--
+        ****************************************************************************
+        * GOOGLE ADSENSE - IMPORTANT!
+        * 1. You MUST sign up for Google AdSense and get your site approved.
+        * 2. Replace 'ca-pub-YOUR_PUBLISHER_ID_HERE' below with YOUR actual
+        *    AdSense Publisher ID once you have it.
+        * 3. Ads will NOT show with this placeholder ID.
+        * This is for Auto Ads, which Google will try to place automatically.
+        ****************************************************************************
+    -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-YOUR_PUBLISHER_ID_HERE"
+         crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px; /* Add some padding for potential top/bottom ads */
+            box-sizing: border-box;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        #sudoku-board {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            width: min(90vw, 450px); /* Responsive width */
+            height: min(90vw, 450px);/* Responsive height */
+            border: 3px solid #333;
+            margin-bottom: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            font-size: clamp(1em, 4vw, 1.5em); /* Responsive font size */
+            font-weight: bold;
+            box-sizing: border-box;
+        }
+
+        .cell input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            text-align: center;
+            font-size: inherit;
+            font-weight: inherit;
+            background-color: #fff;
+            color: #007bff;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .cell input:disabled {
+            background-color: #e9ecef;
+            color: #333;
+            cursor: not-allowed;
+        }
+
+        .cell:nth-child(3n) { border-right-width: 2px; border-right-color: #555; }
+        .cell:nth-child(9n) { border-right-width: 1px; border-right-color: #ccc; }
+        .row-start .cell { border-top-width: 2px; border-top-color: #555; }
+        .row-start:first-child .cell { border-top-width: 1px; border-top-color: #ccc; }
+
+        #controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 15px;
+            font-size: 0.9em;
+            margin: 5px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #message {
+            font-size: 1.2em;
+            min-height: 1.5em;
+            color: green;
+            text-align: center;
+        }
+        #message.error {
+            color: red;
+        }
+
+        #difficulty-selector {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        #difficulty-selector label {
+            margin-right: 5px;
+        }
+
+        /* Simple container for potential manual ad slots if you choose that later */
+        .ad-placeholder {
+            width: 100%;
+            max-width: 728px; /* Example max width for a banner */
+            min-height: 50px; /* Minimum height for ad visibility */
+            margin: 20px auto;
+            background-color: #e0e0e0; /* Placeholder visual */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border: 1px dashed #aaa;
+            font-size: 0.8em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <!-- Example: Placeholder for a top banner ad (if not using Auto Ads exclusively) -->
+    <!-- <div class="ad-placeholder">Top Ad Area (if using manual ad units)</div> -->
+
+    <h1>Sudoku</h1>
+
+    <div id="difficulty-selector">
+        <label for="difficulty">Difficulty:</label>
+        <select id="difficulty">
+            <option value="easy">Easy (40 clues)</option>
+            <option value="medium" selected>Medium (30 clues)</option>
+            <option value="hard">Hard (20 clues)</option>
+        </select>
+    </div>
+
+    <div id="sudoku-board"></div>
+
+    <div id="controls">
+        <button id="new-game-btn">New Game</button>
+        <button id="check-btn">Check Solution</button>
+        <button id="solve-btn">Solve</button>
+    </div>
+
+    <div id="message"></div>
+
+    <!-- Example: Placeholder for a bottom banner ad (if not using Auto Ads exclusively) -->
+    <!-- <div class="ad-placeholder">Bottom Ad Area (if using manual ad units)</div> -->
+
+
+    <script>
+        const BOARD_SIZE = 9;
+        const SUBGRID_SIZE = 3;
+        let board = [];
+        let solution = [];
+
+        const boardElement = document.getElementById('sudoku-board');
+        const messageElement = document.getElementById('message');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const checkBtn = document.getElementById('check-btn');
+        const solveBtn = document.getElementById('solve-btn');
+        const difficultySelect = document.getElementById('difficulty');
+
+        function isValid(grid, row, col, num) {
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                if (grid[row][x] === num) return false;
+            }
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                if (grid[x][col] === num) return false;
+            }
+            const startRow = row - row % SUBGRID_SIZE;
+            const startCol = col - col % SUBGRID_SIZE;
+            for (let i = 0; i < SUBGRID_SIZE; i++) {
+                for (let j = 0; j < SUBGRID_SIZE; j++) {
+                    if (grid[i + startRow][j + startCol] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        function solveSudoku(grid) {
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (grid[r][c] === 0) {
+                        const numbers = shuffleArray([...Array(BOARD_SIZE).keys()].map(i => i + 1));
+                        for (let num of numbers) {
+                            if (isValid(grid, r, c, num)) {
+                                grid[r][c] = num;
+                                if (solveSudoku(grid)) {
+                                    return true;
+                                }
+                                grid[r][c] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function generatePuzzle(difficulty) {
+            solution = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+            solveSudoku(solution);
+            board = JSON.parse(JSON.stringify(solution));
+
+            let cellsToRemove;
+            switch (difficulty) {
+                case 'easy': cellsToRemove = BOARD_SIZE * BOARD_SIZE - 40; break;
+                case 'medium': cellsToRemove = BOARD_SIZE * BOARD_SIZE - 30; break;
+                case 'hard': cellsToRemove = BOARD_SIZE * BOARD_SIZE - 20; break;
+                default: cellsToRemove = BOARD_SIZE * BOARD_SIZE - 30;
+            }
+            
+            let attempts = cellsToRemove;
+            while (attempts > 0 && (BOARD_SIZE * BOARD_SIZE - attempts) > 17) { // Ensure min 17 clues
+                const r = Math.floor(Math.random() * BOARD_SIZE);
+                const c = Math.floor(Math.random() * BOARD_SIZE);
+                if (board[r][c] !== 0) {
+                    board[r][c] = 0;
+                    attempts--;
+                }
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                const isRowStart = (r % SUBGRID_SIZE === 0);
+                // No need for explicit rowDiv if not using it for complex styling
+
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.classList.add('cell');
+                    if (isRowStart && r !== 0) { // Apply to all cells in a subgrid starting row
+                         cellDiv.style.borderTopWidth = '2px';
+                         cellDiv.style.borderTopColor = '#555';
+                    }
+                     // Thicker vertical lines for subgrids (already handled by :nth-child in CSS)
+
+                    const input = document.createElement('input');
+                    input.type = 'text'; // Use text for better mobile compatibility (can restrict with pattern)
+                    input.pattern = "[1-9]"; // HTML5 pattern validation
+                    input.maxLength = 1;
+                    input.dataset.row = r;
+                    input.dataset.col = c;
+
+                    if (board[r][c] !== 0) {
+                        input.value = board[r][c];
+                        input.disabled = true;
+                    } else {
+                        input.addEventListener('input', handleInput);
+                    }
+                    cellDiv.appendChild(input);
+                    boardElement.appendChild(cellDiv);
+                }
+            }
+        }
+        
+        function handleInput(event) {
+            const input = event.target;
+            const r = parseInt(input.dataset.row);
+            const c = parseInt(input.dataset.col);
+            const value = input.value;
+
+            if (value === '' || (value >= '1' && value <= '9')) {
+                board[r][c] = value === '' ? 0 : parseInt(value);
+                input.style.color = '#007bff';
+                messageElement.textContent = '';
+                messageElement.className = '';
+            } else {
+                input.value = ''; 
+                board[r][c] = 0;
+            }
+        }
+
+        function startNewGame() {
+            const selectedDifficulty = difficultySelect.value;
+            generatePuzzle(selectedDifficulty);
+            renderBoard();
+            messageElement.textContent = 'New game started. Good luck!';
+            messageElement.className = '';
+        }
+
+        function checkSolution() {
+            let isCorrect = true;
+            let isComplete = true;
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cellInput = boardElement.querySelector(`input[data-row="${r}"][data-col="${c}"]`);
+                    const userValue = board[r][c];
+                    
+                    if (userValue === 0) {
+                        isComplete = false;
+                    } else if (userValue !== solution[r][c]) {
+                        isCorrect = false;
+                        if(cellInput) cellInput.style.color = 'red';
+                    } else if (!cellInput.disabled) {
+                         if(cellInput) cellInput.style.color = 'green';
+                    }
+                }
+            }
+
+            if (!isComplete && isCorrect) {
+                 messageElement.textContent = 'Board is valid so far, but not complete.';
+                 messageElement.className = '';
+            } else if (isCorrect && isComplete) {
+                messageElement.textContent = 'Congratulations! You solved it!';
+                messageElement.className = '';
+                boardElement.querySelectorAll('input:not(:disabled)').forEach(input => input.disabled = true);
+            } else {
+                messageElement.textContent = 'Some numbers are incorrect. Keep trying!';
+                messageElement.className = 'error';
+            }
+        }
+
+        function solveBoard() {
+            board = JSON.parse(JSON.stringify(solution));
+            renderBoard(); 
+            boardElement.querySelectorAll('input').forEach(input => {
+                const r = parseInt(input.dataset.row);
+                const c = parseInt(input.dataset.col);
+                if (board[r][c] !== 0) { // Check if board has a value for this cell
+                    input.value = board[r][c];
+                } else {
+                    input.value = ''; // Should not happen if solution is always complete
+                }
+                input.disabled = true;
+            });
+            messageElement.textContent = 'Board solved!';
+            messageElement.className = '';
+        }
+
+        newGameBtn.addEventListener('click', startNewGame);
+        checkBtn.addEventListener('click', checkSolution);
+        solveBtn.addEventListener('click', solveBoard);
+        difficultySelect.addEventListener('change', startNewGame);
+
+        startNewGame();
+    </script>
+</body>
+</html>
